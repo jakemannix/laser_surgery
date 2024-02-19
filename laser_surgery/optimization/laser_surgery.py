@@ -70,22 +70,22 @@ def compare_factorization(linear: nn.Linear, rank: int, x: Tensor):
         return torch.allclose(factored_output, reconstructed_output, atol=1e-7)
 
 
-def factorization_latency_perf_test(linear: nn.Linear, rank: int, x: Tensor):
+def factorization_latency_perf_test(linear: nn.Linear, rank: int, x: Tensor, num_passes: int = 1000):
     # first perf-test how long it takes to run the forward pass with the linear layer, then with the factored layer
     import time
     start = time.perf_counter()
-    for _ in range(1000):
+    for _ in range(num_passes):
         y = linear(x)
     end = time.perf_counter()
     linear_time = end - start
-    print(f"Linear layer took {linear_time} seconds to run 1000 forward passes")
+    print(f"Linear layer took {linear_time} seconds to run {num_passes} forward passes")
     factored_layer = FactoredLinear.from_linear(linear, rank)
     start = time.perf_counter()
-    for _ in range(1000):
+    for _ in range(num_passes):
         y = factored_layer(x)
     end = time.perf_counter()
     factored_time = end - start
-    print(f"Factored layer (rank: {rank}) took {factored_time} seconds to run 1000 forward passes")
+    print(f"Factored layer (rank: {rank}) took {factored_time} seconds to run {num_passes} forward passes")
     print(f"fractional time =  {factored_time/linear_time} * linear_time")
     return linear_time, factored_time
 
