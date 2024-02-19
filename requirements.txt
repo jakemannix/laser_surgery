@@ -1,0 +1,5 @@
+# internal requirements
+torch
+datasets
+transformers
+huggingface_hub
