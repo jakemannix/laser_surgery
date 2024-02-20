@@ -33,7 +33,6 @@ class FactoredLinear(nn.Module):
                f"bias={True if self.bias is not None else False}, reduced_rank: {self.S.shape[0]})"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x.shape (seq_len, in_features), must be transposed and then undone on return
         # print(f"FactoredLinear.forward: x.shape={x.shape}, U.shape={self.U.shape}, S.shape={self.S.shape}, " +
         #      f"Vt.shape={self.Vt.shape}, bias.shape={self.bias.shape if self.bias is not None else None}")
 
@@ -42,8 +41,11 @@ class FactoredLinear(nn.Module):
         if len(x.shape) == 3 and x.shape[0] == 1:
             x = x.squeeze(0)
             must_unsqueeze = True
-        # TODO: handle batch sizes > 1 by looking for or writing a batched multi_dot implementation
         x = x.to(self.device)
+        # TODO: handle batch sizes > 1 by looking for or writing a batched multi_dot implementation
+        # NOTE: we can probably do this with sequential calls to torch.bmm to start out.
+        # as the major gains should come from the reordering of the summation in the multi-matrix product.
+        # also note: x.shape (seq_len, in_features), must be transposed and then undone on return
         result = torch.linalg.multi_dot([self.U, torch.diag(self.S), self.Vt, x.t()]).t()
         result = result + self.bias if self.bias is not None else result
         if must_unsqueeze:
