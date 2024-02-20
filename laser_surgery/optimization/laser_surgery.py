@@ -7,91 +7,11 @@ from torch import nn, Tensor
 from torch.nn.modules import Module
 import numpy as np
 from evaluation.loss_evaluator import evaluate_loss
+from layers.factored_linear import FactoredLinear
 
 
-class FactoredLinear(nn.Module):
-    """
-    Layer that represents the SVD factorization of a linear layer, U * S * V^T,
-    where U has shape (out_features, small_rank), S has shape (small_rank, small_rank),
-    V^T has shape (small_rank, in_features), and the bias has shape (out_features).
-    """
-    def __init__(self, U: Tensor, S: Tensor, Vt: Tensor, bias: Tensor = None,
-                 device: torch.device = torch.device('cuda')):
-        super(FactoredLinear, self).__init__()
-        self.U = U.to(device).float()    # Shape: (out_features, small_rank)
-        self.S = S.to(device).float()    # Shape: (small_rank, small_rank)
-        self.Vt = Vt.to(device).float()  # Shape: (small_rank, in_features)
-        self.bias = bias.to(device).float() if bias is not None else None
-        self.device = device
-        self.logger = get_logger()
-        self.logger.debug(f"FactoredLinear initialized with U.shape={self.U.shape}, S.shape={self.S.shape}, "
-                          f"Vt.shape={self.Vt.shape} and bias.shape="
-                          f"{self.bias.shape if self.bias is not None else None}")
-
-    def __repr__(self):
-        return f"FactoredLinear(in_features={self.Vt.shape[1]}, out_features: {self.U.shape[0]}, " \
-               f"bias={True if self.bias is not None else False}, reduced_rank: {self.S.shape[0]})"
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # print(f"FactoredLinear.forward: x.shape={x.shape}, U.shape={self.U.shape}, S.shape={self.S.shape}, " +
-        #      f"Vt.shape={self.Vt.shape}, bias.shape={self.bias.shape if self.bias is not None else None}")
-
-        # if x.shape is (1, seq_len, in_features), we need to remove the first dimension
-        must_unsqueeze = False
-        if len(x.shape) == 3 and x.shape[0] == 1:
-            x = x.squeeze(0)
-            must_unsqueeze = True
-        x = x.to(self.device)
-        # TODO: handle batch sizes > 1 by looking for or writing a batched multi_dot implementation
-        # NOTE: we can probably do this with sequential calls to torch.bmm to start out.
-        # as the major gains should come from the reordering of the summation in the multi-matrix product.
-        # also note: x.shape (seq_len, in_features), must be transposed and then undone on return
-        result = torch.linalg.multi_dot([self.U, torch.diag(self.S), self.Vt, x.t()]).t()
-        result = result + self.bias if self.bias is not None else result
-        if must_unsqueeze:
-            result = result.unsqueeze(0)
-        return result
-
-    @staticmethod
-    def from_linear(linear: nn.Linear, small_rank: int, device: torch.device = torch.device('cuda')):
-        weights: Tensor = linear.weight.double()
-        bias: Tensor = linear.bias.double() if linear.bias is not None else None
-        U, S, Vt = torch.linalg.svd(weights, full_matrices=False)
-        U, S, Vt = U[:, :small_rank], S[:small_rank], Vt[:small_rank, :]
-        return FactoredLinear(U, S, Vt, bias, device)
-
-
-# TODO: this assumes x is a single input, not a batch
-def compare_factorization(linear: nn.Linear, rank: int, x: Tensor):
-    factored = FactoredLinear.from_linear(linear, rank)
-    reconstructed = factored.U @ torch.diag(factored.S) @ factored.Vt
-    bias = linear.bias if linear.bias is not None else 0
-    with torch.no_grad():
-        factored_output = factored(x)
-        reconstructed_output = reconstructed(x) + bias
-        return torch.allclose(factored_output, reconstructed_output, atol=1e-7)
-
-
-def factorization_latency_perf_test(linear: nn.Linear, rank: int, x: Tensor, num_passes: int = 1000):
-    # first perf-test how long it takes to run the forward pass with the linear layer, then with the factored layer
-    import time
-    start = time.perf_counter()
-    for _ in range(num_passes):
-        y = linear(x)
-    end = time.perf_counter()
-    linear_time = end - start
-    print(f"Linear layer took {linear_time} seconds to run {num_passes} forward passes")
-    factored_layer = FactoredLinear.from_linear(linear, rank)
-    start = time.perf_counter()
-    for _ in range(num_passes):
-        y = factored_layer(x)
-    end = time.perf_counter()
-    factored_time = end - start
-    print(f"Factored layer (rank: {rank}) took {factored_time} seconds to run {num_passes} forward passes")
-    print(f"fractional time =  {factored_time/linear_time} * linear_time")
-    return linear_time, factored_time
-
-
+# TODO: this class is kinda silly overkill.  We only currently use the factory methods and the metric_fn.
+# unless we want to generalize to lm_eval-style metrics, could just use evaluate_loss() directly.
 class Validator:
     def __init__(self,
                  metric_fn: Callable[[PreTrainedModel], float]):
@@ -133,6 +53,7 @@ class ModelModification:
     reduced_rank: int
 
 
+# Currently,  mostly holds onto the state of previously modified layers, and provides a method to revert them.
 class PrismaticLaserReducer:
     def __init__(self,
                  model: PreTrainedModel,
@@ -260,8 +181,8 @@ def marchenko_pastur_threshold(sigma, n, m):
     return threshold
 
 
-def scan_layers_and_report(model: PreTrainedModel, tokenizer, dataset_name: str,
-                           split: str, max_length: int,
+def scan_layers_and_report(model: PreTrainedModel, tokenizer: PreTrainedTokenizer,
+                           dataset_name: str, split: str, max_length: int,
                            layer_type: str, layer_number: int,
                            rank_override: int = None,
                            num_samples: int = 16, seed: int = 0):
