@@ -28,6 +28,10 @@ reducer = scan_layers_and_report(model=model,
                                  split="train", max_length=128, 
                                  layers_type="mlp.fc1", layer_number=31, 
                                  rank_override=64, num_samples=16, seed=137)
+# inspect the model:
+print(reducer.model)
+# revert it back to the original model:
+reducer.revert()
 ```
 
 Note: the current evaluation method is based on raw language model loss, and from the paper,
