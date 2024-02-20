@@ -60,6 +60,16 @@ def sample_data(dataset_name: str, split: str = "train",
     return data["text"]
 
 
+# Note, from the paper, we will find that perplexity does not improve with the reduction of the model.
+# "While there is an improvement in the task at hand, the model’s perplexity worsens slightly after
+# applying LASER. We do not yet fully understand what the worsening in perplexity of the model corresponds
+# to and leave this for future study"
+# and
+# "For layers corresponding to the MLP input matrices, the
+# perplexity of the model increases from 4.8 to 5.0, showing that the language modeling objective is indeed
+# slightly effected. For the MLP output layers, the perplexity of GPT-J on PILE increases from 4.8 to 4.9 with
+# LASER. It may be possible to fix this small degradation by calibrating the temperature of the model."
+# from https://arxiv.org/abs/2312.13558
 def evaluate_loss(model, tokenizer, dataset_name, split, num_samples=10, max_length=512, seed=42):
     texts = sample_data(dataset_name, split, num_samples, seed)
     return per_token_average_loss(model=model, tokenizer=tokenizer, texts=texts, max_length=max_length)
