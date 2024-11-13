@@ -4,3 +4,4 @@ datasets
 transformers
 huggingface_hub
 lm_eval
+runpod

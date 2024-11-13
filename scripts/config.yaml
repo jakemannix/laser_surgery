@@ -1,0 +1,72 @@
+base_model: mlabonne/NeuralMonarch-7B
+model_type: MistralForCausalLM
+tokenizer_type: LlamaTokenizer
+is_mistral_derived_model: true
+
+load_in_8bit: false
+load_in_4bit: true
+strict: false
+
+rl: dpo
+chat_template: chatml
+datasets:
+  - path: mlabonne/chatml-OpenHermes2.5-dpo-binarized-alpha
+    split: train
+    type: chatml.intel
+dataset_prepared_path:
+val_set_size: 0.01
+output_dir: ./out
+
+adapter: qlora
+lora_model_dir:
+
+sequence_len: 1800
+sample_packing: false
+pad_to_sequence_len: false
+
+lora_r: 16
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_linear: true
+lora_fan_in_fan_out:
+lora_target_modules:
+
+wandb_project: axolotl
+wandb_entity:
+wandb_watch:
+wandb_name:
+wandb_log_model:
+
+gradient_accumulation_steps: 8
+micro_batch_size: 1
+num_epochs: 1
+optimizer: paged_adamw_32bit
+lr_scheduler: cosine
+learning_rate: 5e-7
+
+train_on_inputs: false
+group_by_length: false
+bf16: true
+fp16: false
+tf32: true
+
+gradient_checkpointing: true
+early_stopping_patience:
+resume_from_checkpoint:
+local_rank:
+logging_steps: 1
+xformers_attention:
+flash_attention: true
+
+warmup_steps: 100
+evals_per_epoch: 1
+eval_table_size:
+eval_table_max_new_tokens: 128
+save_steps: 1080
+max_steps: 1080
+debug:
+deepspeed:
+weight_decay: 0.0
+fsdp:
+fsdp_config:
+special_tokens:

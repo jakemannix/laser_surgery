@@ -1,0 +1,9 @@
+model: "SomeFancyName"
+gpu: "NVIDIA GeForce RTX 4090"
+num_gpus: 1
+container_disk: 75
+cloud_type: "COMMUNITY"
+llm_autoeval: true
+debug: false
+
+username: jakemannix

@@ -181,6 +181,37 @@ def marchenko_pastur_threshold(sigma, n, m):
     return threshold
 
 
+#  currently for Phi-2, typically the attention matrices have mp_rank ~ 400-500, removing 90-95% of their parameters
+#  but the PhiMLP layers are almost uniformly close to max rank (>2200), except for layers 0, 1, and 31.
+#  but the Laser paper implied that after layer 24 or so, the useful rank of the MLPs was 95-99% lower
+#  This is critical, because 60% of Phi-2's weights are in the MLPs
+#  NOTE: this method will take 20min on a Macbook Pro for Phi-2 (although I may not be using the right device?)
+def calculate_mp_thresholds(model, layer_type: Optional[str] = None, layer_number: Optional[int] = None):
+    # Iterates over the model for matching layers, computing the Marchenko-Pastur thresholds for all matching
+    # Linear layers
+    mp_ranks = {}
+    named_modules: list[tuple[str, Module]] = list(model.named_modules())
+    for module_name, module in named_modules:
+        if ((layer_type is None or layer_type in module_name)
+                and (layer_number is None or str(layer_number) in module_name)
+                and isinstance(module, nn.Linear)):
+            print("calculating mp_rank for " + module_name)
+            weights: Tensor = module.weight.double()
+            if torch.cuda.is_available():
+                weights = weights.to(torch.device("cuda"))
+            S = torch.linalg.svdvals(weights)
+            mp_rank = get_rank(S, weights.size(0), weights.size(1))
+            print("mp_rank[" + module_name + "] = " + str(mp_rank))
+            mp_ranks[module_name] = mp_rank
+    return mp_ranks
+
+
+def get_rank_if_squre(q75, q25):
+    iqr = q75 - q25
+    sigma_estimated = iqr / 1.349
+    threshold = sigma_estimated * 2  # 1.2 * iqr = 1.2 * (75quantile - 25quantile)
+
+
 def scan_layers_and_report(model: PreTrainedModel, tokenizer: PreTrainedTokenizer,
                            dataset_name: str, split: str, max_length: int,
                            layer_type: str, layer_number: int,
