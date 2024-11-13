@@ -1,0 +1,19 @@
+In this directory, original_lazy_axolotl_notebook is Maxime Labonne's original notebook.
+
+lazy_axolotl.py is a python script for the same purpose, which launches a RunPod instance, but requires
+quite a few configuration variables (not yet stored anywhere, as some are secrets, and should be in
+the environment variables or notebook userdata), and a YAML Axolotl config (stored currently in config.yaml).
+
+The runpod currently assumes there is a github gist containing the actual axolotl start script, which currently lives
+in training_script.sh.  This latter script pulls in "merge_upload" which Maxime stores in a gist, but is also copied
+in this directory as merge_upload.py
+
+---
+
+Models + datasets to try:
+
+model: https://huggingface.co/cognitivecomputations/dolphin-2.5-mixtral-8x7b
+(100GB of data, ~50B parameters, instruction fine-tuned already, on
+https://huggingface.co/datasets/teknium/openhermes and others, but not DPO)
+
+DPO data: https://huggingface.co/datasets/Intel/orca_dpo_pairs - 12k pairs
